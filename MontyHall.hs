@@ -2,6 +2,8 @@ module Main where
 
 import           System.Random
 import           Data.Set hiding (filter)
+import System.Environment
+import Control.Monad
 
 type Choice = Int
 
@@ -11,7 +13,7 @@ data Price = Donkey
 
 data Tactic = Stay
             | Change
-  deriving (Show, Eq)
+  deriving (Show, Read, Eq)
 
 data Game = Game { doorCount :: Int, winning :: Int, initial :: Choice }
   deriving Show
@@ -61,8 +63,40 @@ randomGame n =
     w <- getStdRandom (randomR (1, n))
     return $ Game n w i
 
+playVerboseGame :: Tactic -> Game -> IO Bool
+playVerboseGame t g =
+  do
+    let win = playGame t g == Car
+    putStrLn $ "Playing with " ++
+               show (doorCount g) ++
+               " doors, car behind door: " ++
+               show (winning g) ++
+               " with tactic: " ++
+               show t
+    putStrLn $ "Player chooses first: " ++
+               show (initial g) ++
+               ", then Monty opens doors: " ++
+               show (montyChoice g)
+    putStrLn $ "Players final choice " ++ show (finalChoice t g) ++ " and " ++ (if win 
+                                                                                  then "WINS!"
+                                                                                  else "LOOSES.")
+    return win
+
+performRandomBatch :: Tactic -> Int -> Int -> IO ()
+performRandomBatch t d n = 
+      do 
+        g <- randomGame d;
+        playVerboseGame t g;
+        when  (n > 1) $ performRandomBatch t d (n-1)
+
 main :: IO ()
-main = undefined
+main = 
+  do 
+    args <- getArgs;
+    let count = (read::String -> Int) $ head args
+    let doors = ( read::String -> Int) $  args !! 1
+    let tactic = (read::String -> Tactic) $ args !! 2
+    performRandomBatch tactic doors count
 
 -- Tests
 montyChoiceIsAllwaysDonkey :: Bool
