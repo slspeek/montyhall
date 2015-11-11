@@ -1,96 +1,73 @@
 module Main where
 
-import           Data.List
 import           System.Random
+import           Data.Set hiding (filter)
+
+type Choice = Int
 
 data Price = Donkey
            | Car
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq)
 
 data Tactic = Stay
             | Change
   deriving (Show, Eq)
 
-boards = nub $ permutations [Donkey, Donkey, Car]
-
-data Choice = First
-            | Second
-            | Third
-  deriving (Show, Eq, Enum)
-
-data Game = Game { board :: [Price], initial :: Choice }
+data Game = Game { doorCount :: Int, winning :: Int, initial :: Choice }
   deriving Show
 
-allGames :: [Game]
-allGames = [Game b i | b <- boards
-                     , i <- [First, Second, Third]]
+allGames :: Int -> [Game]
+allGames n = [Game n b i | b <- [1 .. n]
+                         , i <- [1 .. n]]
 
-montyChoice :: Game -> Choice
-montyChoice game =
-  case initial game of
-    First ->
-      case b !! 1 of
-        Donkey -> Second
-        Car    -> Third
-    Second ->
-      case head b of
-        Donkey -> First
-        Car    -> Third
-    Third ->
-      case head b of
-        Donkey -> First
-        Car    -> Second
+montyChoice :: Game -> [Choice]
+montyChoice g = if initial g == winning g
+                  then 
+                  -- should kick out an arbitrary element, but we kick the last
+                  init allBut
+                  else allBut
   where
-    b = board game
+    allBut = [x | x <- [1 .. (doorCount g)]
+                , x /= initial g
+                , x /= winning g]
 
 choose :: Game -> Choice -> Price
-choose g c =
-  case c of
-    First  -> head b
-    Second -> b !! 1
-    Third  -> b !! 2
-  where
-    b = board g
-
-montyChoiceIsAllwaysDonkey :: Bool
-montyChoiceIsAllwaysDonkey = and [choose g (montyChoice g) == Donkey | g <- allGames]
-
-montyChoiceIsNeverInitial :: Bool
-montyChoiceIsNeverInitial = and
-                              [montyChoice g /= initial g | g <- allGames ]
+choose g c
+  | c == winning g = Car
+choose g c = Donkey
 
 finalChoice :: Tactic -> Game -> Choice
-finalChoice Stay g  = initial g
-finalChoice Change g  =
-  case initial g of
-    First ->
-      case monty of
-        Second -> Third
-        Third  -> Second
-    Second ->
-      case monty of
-        First -> Third
-        Third -> First
-    Third ->
-      case monty of
-        First  -> Second
-        Second -> First
-    where monty = montyChoice g
-          
+finalChoice Stay g = initial g
+finalChoice Change g = head . toList $ fromList [1 .. (doorCount g)] `difference`
+                                       fromList (montyChoice g) `difference`
+                                       singleton (initial g)
 
-playGame::Tactic -> Game -> Price
-playGame t g = choose g c 
+playGame :: Tactic -> Game -> Price
+playGame t g = choose g c
   where
-    c = finalChoice t g 
+    c = finalChoice t g
 
+winChance :: Int -> Tactic -> Float
+winChance n t = wins / total
+  where
+    pricesWon = [playGame t g | g <- allGames n]
+    wins = fromIntegral $ length (filter (== Car) pricesWon)
+    total = fromIntegral $ length pricesWon
 
-winChance :: Tactic -> Float
-winChance t = wins/total
-  where 
-    allgames = allGamePrices t
-    wins = fromIntegral $ length  (filter (==Car) allgames)
-    total = fromIntegral $ length allgames
-    allGamePrices t = [  playGame t g| g <- allGames ]
+randomGame :: Int -> IO Game
+randomGame n =
+  do
+    i <- getStdRandom (randomR (1, n))
+    w <- getStdRandom (randomR (1, n))
+    return $ Game n w i
 
 main :: IO ()
 main = undefined
+
+-- Tests
+montyChoiceIsAllwaysDonkey :: Bool
+montyChoiceIsAllwaysDonkey = and [winning g `notElem` montyChoice g | g <- allGames 10]
+
+montyChoiceIsNeverInitial :: Bool
+montyChoiceIsNeverInitial = and [initial g `notElem` montyChoice g | g <- allGames 10]
+
